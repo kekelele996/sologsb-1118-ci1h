@@ -11,12 +11,14 @@ import { stratumStore } from '@/stores/stratumStore'
 import { trenchStore } from '@/stores/trenchStore'
 import { artifactStore } from '@/stores/artifactStore'
 import { relationStore } from '@/stores/relationStore'
+import { fieldShadowStore } from '@/stores/fieldShadowStore'
 import { uid } from '@/utils/id'
 
 const trenchState = useStore(trenchStore)
 const stratumState = useStore(stratumStore)
 const artifactState = useStore(artifactStore)
 const relationState = useStore(relationStore)
+const shadowState = useStore(fieldShadowStore)
 
 const { result: order } = useStratumOrder(
   computed(() => stratumState.strata),
@@ -279,6 +281,13 @@ async function applyBatchType(): Promise<void> {
           <el-tag v-if="duplicatedOf(row)" type="warning" size="small" effect="dark" class="mini">重复</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="统一单位号（整理室）" width="150">
+        <template #default="{ row }: { row: Stratum }">
+          <el-tooltip content="整理室编目员裁定，工地只读；通过「整理室→工地」同步获得" placement="top">
+            <span class="mono unified">{{ shadowState.unifiedCodeOf(row.id) || '待整理室裁定' }}</span>
+          </el-tooltip>
+        </template>
+      </el-table-column>
       <el-table-column label="类型" width="120">
         <template #default="{ row }: { row: Stratum }">
           <TrenchTag :unit-type="row.type" size="small" />
@@ -406,6 +415,10 @@ async function applyBatchType(): Promise<void> {
 }
 .mini {
   margin-left: 4px;
+}
+.unified {
+  color: #a9762f;
+  font-weight: 600;
 }
 .warn {
   margin: 0;

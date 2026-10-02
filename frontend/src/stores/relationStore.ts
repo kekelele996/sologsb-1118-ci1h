@@ -1,6 +1,8 @@
 import { createStore } from 'zustand/vanilla'
 import type { Relation } from '@/types'
-import { db, syncAll, syncDelete, syncPut } from '@/hooks/usePersistentStore'
+import { syncAll, syncDelete, syncPut } from '@/db/repo'
+import { fieldDb } from '@/db/fieldDb'
+import { syncStore } from '@/stores/syncStore'
 
 export interface RelationState {
   relations: Relation[]
@@ -16,21 +18,24 @@ export const relationStore = createStore<RelationState>((set, get) => ({
   relations: [],
   loaded: false,
   hydrate: async () => {
-    const relations = await syncAll<Relation>(db.relations)
+    const relations = await syncAll<Relation>(fieldDb.relations)
     relations.sort((a, b) => a.id.localeCompare(b.id))
     set({ relations, loaded: true })
   },
   save: async (relation) => {
-    await syncPut<Relation>(db.relations, relation)
+    await syncPut<Relation>(fieldDb.relations, relation)
     await get().hydrate()
+    void syncStore.getState().sync('fieldToOffice')
   },
   remove: async (id) => {
-    await syncDelete<Relation>(db.relations, id)
+    await syncDelete<Relation>(fieldDb.relations, id)
     await get().hydrate()
+    void syncStore.getState().sync('fieldToOffice')
   },
   removeByStratum: async (stratumId) => {
     const targets = get().relations.filter((item) => item.unitAId === stratumId || item.unitBId === stratumId)
-    await Promise.all(targets.map((item) => syncDelete<Relation>(db.relations, item.id)))
+    await Promise.all(targets.map((item) => syncDelete<Relation>(fieldDb.relations, item.id)))
     await get().hydrate()
+    void syncStore.getState().sync('fieldToOffice')
   }
 }))
