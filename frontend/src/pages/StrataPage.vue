@@ -279,6 +279,12 @@ async function applyBatchType(): Promise<void> {
           <el-tag v-if="duplicatedOf(row)" type="warning" size="small" effect="dark" class="mini">重复</el-tag>
         </template>
       </el-table-column>
+      <el-table-column label="统一单位号" width="130">
+        <template #default="{ row }: { row: Stratum }">
+          <span class="mono">{{ row.unifiedCode || '—' }}</span>
+          <el-tag size="small" effect="info" type="info" class="mini">编目员</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="类型" width="120">
         <template #default="{ row }: { row: Stratum }">
           <TrenchTag :unit-type="row.type" size="small" />

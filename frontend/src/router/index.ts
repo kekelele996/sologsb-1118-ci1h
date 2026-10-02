@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '层位关系' }
   },
   {
+    path: '/catalog',
+    name: 'catalog',
+    component: () => import('@/pages/CatalogDesk.vue'),
+    meta: { title: '编目台' }
+  },
+  {
     path: '/sections',
     name: 'sections',
     component: () => import('@/pages/SectionsPage.vue'),

@@ -27,6 +27,12 @@ export interface Stratum {
   date: string
   /** 绘图与拍照编号 */
   drawingNo: string
+  /** 统一单位号（编目员维护，记录员不可改） */
+  unifiedCode?: string
+  /** 跨探方层位序号（编目员维护；null 按深度自动重算） */
+  sequenceOrder?: number | null
+  /** 裁定理由（编目员维护，深度改动重算后照旧保留） */
+  rationale?: string
 }
 
 /** 厚度（米） */

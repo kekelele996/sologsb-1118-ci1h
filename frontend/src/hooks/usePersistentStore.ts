@@ -1,22 +1,26 @@
 import { onUnmounted, reactive } from 'vue'
 import type { StoreApi } from 'zustand/vanilla'
 import Dexie, { type Table } from 'dexie'
-import type { Artifact, Relation, Stratum, Trench } from '@/types'
+import type { ArchiveConclusion, Artifact, CatalogRecord, OutboxItem, Relation, Stratum, Trench } from '@/types'
+import { createCatalogRecord } from '@/types'
 
 /** IndexedDB 数据结构版本号 */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export interface MetaRow {
   key: string
-  value: number
+  value: number | string
 }
 
-/** Dexie 封装：探方 / 地层单位 / 出土物 / 层位关系 四张表 + 元数据表 */
+/** Dexie 封装：探方 / 地层单位 / 出土物 / 层位关系 + 编目记录 / 归档结论 / 同步发件箱 + 元数据表 */
 class TrenchLogDb extends Dexie {
   trenches!: Table<Trench, string>
   strata!: Table<Stratum, string>
   artifacts!: Table<Artifact, string>
   relations!: Table<Relation, string>
+  catalogRecords!: Table<CatalogRecord, string>
+  archiveConclusions!: Table<ArchiveConclusion, string>
+  outbox!: Table<OutboxItem, string>
   meta!: Table<MetaRow, string>
 
   constructor() {
@@ -29,7 +33,7 @@ class TrenchLogDb extends Dexie {
       meta: 'key'
     })
     // v2：地层单位新增「开口层位」字段，迁移时为历史数据补齐默认值
-    this.version(SCHEMA_VERSION)
+    this.version(2)
       .stores({
         trenches: 'id, code, area, backfilled',
         strata: 'id, trenchId, code, type, topDepth',
@@ -50,6 +54,17 @@ class TrenchLogDb extends Dexie {
             }
           })
       })
+    // v3：两端分治——新增编目记录、归档结论、同步发件箱
+    this.version(3).stores({
+      trenches: 'id, code, area, backfilled',
+      strata: 'id, trenchId, code, type, topDepth, unifiedCode',
+      artifacts: 'id, stratumId, code, category, date',
+      relations: 'id, unitAId, unitBId, type, basis',
+      catalogRecords: 'id, stratumId, unifiedCode',
+      archiveConclusions: 'id, status, updatedAt',
+      outbox: 'id, side, table, status, createdAt',
+      meta: 'key'
+    })
   }
 }
 
@@ -58,6 +73,35 @@ export const db = new TrenchLogDb()
 /** 写入当前数据结构版本号 */
 export async function stampDbVersion(): Promise<void> {
   await db.meta.put({ key: 'schemaVersion', value: SCHEMA_VERSION })
+}
+
+/**
+ * 首次打开：把没有归属的历史数据迁移到两端。
+ * - 原始观察（探方 / 地层单位 / 出土物 / 层位关系）归记录员端；
+ * - 按每个地层单位的原始单位号播种一条编目记录（统一单位号），归编目员端。
+ * 迁移只做一次（meta.ownershipMigrated 标记），之后两端各自维护自己的份。
+ */
+export async function migrateToTwoSides(): Promise<void> {
+  const flag = await db.meta.get('ownershipMigrated')
+  if (flag?.value === '1') return
+
+  const strata = await db.strata.toArray()
+  const now = Date.now()
+  const records: CatalogRecord[] = strata.map((stratum) => createCatalogRecord(stratum.id, stratum.code, now))
+  if (records.length > 0) {
+    await db.catalogRecords.bulkPut(records)
+    // 编目成果镜像回共享地层单位（只补编目员字段，不动原始观察）
+    await db.strata.bulkPut(
+      strata.map((stratum) => ({
+        ...stratum,
+        unifiedCode: stratum.code,
+        sequenceOrder: null,
+        rationale: ''
+      }))
+    )
+  }
+
+  await db.meta.put({ key: 'ownershipMigrated', value: '1' })
 }
 
 /** 读取整表 */
